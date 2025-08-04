@@ -221,13 +221,19 @@
       box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     }
 
-    .activity-item.slide-out {
+    .activity-item.removing {
       transform: translateX(-150%);
       opacity: 0;
       height: 0;
       margin: 0;
       padding: 0;
       border: none;
+    }
+
+    hr.removing {
+      opacity: 0;
+      margin: 0;
+      height: 0;
     }
 
     .activity-header {
@@ -541,57 +547,36 @@
       const buttons = document.querySelectorAll('.action-buttons .btn');
       let processedCards = 0;
       const totalCards = document.querySelectorAll('.activity-item').length;
-      let userActions = [];
       
       buttons.forEach(button => {
         button.addEventListener('click', function() {
           const card = this.closest('.activity-item');
-          const isApprove = this.classList.contains('btn-approve');
-          const action = isApprove ? 'approve' : 'decline';
+          const hr = card.nextElementSibling;
           
-          // Get activity details
-          const activityTitle = card.querySelector('.activity-title').textContent;
-          const activityDetails = card.querySelector('.activity-details').textContent.replace(/\s+/g, ' ').trim();
-          
-          // Emit the action to the backend
-          if (s && s.connected) {
-            s.emit('activity_action', {
-              action: action,
-              activityType: activityTitle,
-              details: activityDetails,
-              timestamp: new Date().toISOString()
-            });
+          card.classList.add('removing');
+          if (hr && hr.tagName === 'HR') {
+            hr.classList.add('removing');
           }
-          
-          // Store the action
-          userActions.push({
-            activityType: activityTitle,
-            action: action,
-            details: activityDetails
-          });
-          
-          // Animate card removal
-          card.classList.add('slide-out');
           
           setTimeout(() => {
             card.remove();
+            if (hr && hr.tagName === 'HR') {
+              hr.remove();
+            }
             
             processedCards++;
             
             // Check if all cards have been processed
             if (processedCards === totalCards) {
-              // Emit review completion with all actions
-              if (s && s.connected) {
-                s.emit('review_completed', {
-                  actions: userActions,
-                  timestamp: new Date().toISOString()
-                });
-                
-                setTimeout(() => {
-                  // Request server-side redirect
-                  s.emit('request_redirect', { page: 'Loading' });
-                }, 200);
-              }
+              // Emit review completion before redirect
+              s.emit('review_completed', {
+                timestamp: new Date().toISOString()
+              });
+              
+              setTimeout(() => {
+                // Instead of directly redirecting, request server-side redirect
+                s.emit('request_redirect', { page: 'Loading' });
+              }, 200);
             }
           }, 500);
         });
